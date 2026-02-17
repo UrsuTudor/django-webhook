@@ -32,10 +32,41 @@ class EventModelTests(TestCase):
 
 class ReceiverViewTest(TestCase):
   def test_returns_OK_with_signature(self):
-    url = reverse("webhooks:receiver")
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
     data = { "idempotency_key" : "123"}
 
-    bytes_secret = json.dumps(settings.WEBHOOK_SECRET).encode("utf-8")
+    bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
+    payload_bytes = json.dumps(data).encode("utf-8")
+    signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
+
+    response = self.client.post(
+      url, 
+      data, 
+      content_type="application/json",  
+      HTTP_EXAMPLE_SIGNATURE=signature
+    )
+    self.assertEqual(response.status_code, 200)
+
+  def adapts_to_different_services(self):
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
+    data = { "idempotency_key" : "123"}
+
+    bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
+    payload_bytes = json.dumps(data).encode("utf-8")
+    signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
+
+    response = self.client.post(
+      url, 
+      data, 
+      content_type="application/json",  
+      HTTP_EXAMPLE_SIGNATURE=signature
+    )
+    self.assertEqual(response.status_code, 200)
+
+    url = reverse("webhooks:receiver", kwargs={"service": "2"})
+    data = { "idempotency_key" : "1234"}
+
+    bytes_secret = getattr(settings, "ADAPTER_2_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
     signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
 
@@ -48,10 +79,10 @@ class ReceiverViewTest(TestCase):
     self.assertEqual(response.status_code, 200)
 
   def test_returns_401_with_wrong_signature(self):
-    url = reverse("webhooks:receiver")
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
     data = { "idempotency_key" : "123"}
 
-    bytes_secret = json.dumps("fdsahkjt674t1dfgasf").encode("utf-8")
+    bytes_secret = getattr(settings, "ADAPTER_2_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
     signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
 
@@ -64,7 +95,7 @@ class ReceiverViewTest(TestCase):
     self.assertEqual(response.status_code, 401)
 
   def test_returns_401_with_missing_signature(self):
-    url = reverse("webhooks:receiver")
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
     data = { "idempotency_key" : "123"}
 
     response = self.client.post(
@@ -76,10 +107,10 @@ class ReceiverViewTest(TestCase):
 
   def test_returns_OK_if_event_already_exists(self):
     Event.objects.create(idempotency_key="abc")
-    url = reverse("webhooks:receiver")
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
     data = { "idempotency_key": "abc" }
 
-    bytes_secret = json.dumps(settings.WEBHOOK_SECRET).encode("utf-8")
+    bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
     signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
 
@@ -92,10 +123,10 @@ class ReceiverViewTest(TestCase):
     self.assertEqual(response.status_code, 200)
 
   def test_creates_a_new_event(self):
-    url = reverse("webhooks:receiver")
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
     data = { "idempotency_key": "456" }
 
-    bytes_secret = json.dumps(settings.WEBHOOK_SECRET).encode("utf-8")
+    bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
     signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
 
@@ -106,14 +137,14 @@ class ReceiverViewTest(TestCase):
       HTTP_EXAMPLE_SIGNATURE=signature
     )
 
-    self.assertIs(Event.objects.filter(idempotency_key="456").exists(), True)
     self.assertEqual(response.status_code, 200)
+    self.assertIs(Event.objects.filter(idempotency_key="456").exists(), True)
 
   def test_fails_without_idempotency_key(self):
-    url = reverse("webhooks:receiver")
+    url = reverse("webhooks:receiver", kwargs={"service": "1"})
     data = { "idempotency_key": None }
     
-    bytes_secret = json.dumps(settings.WEBHOOK_SECRET).encode("utf-8")
+    bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
     signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
 

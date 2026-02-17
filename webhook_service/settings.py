@@ -15,7 +15,8 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+ADAPTER_1_SECRET = os.getenv("ADAPTER_1_SECRET")
+ADAPTER_2_SECRET = os.getenv("ADAPTER_2_SECRET")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

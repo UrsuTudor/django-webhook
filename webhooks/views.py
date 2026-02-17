@@ -1,25 +1,25 @@
-from django.shortcuts import render
+import json
+from webhooks.models import Event
 from django.http import HttpResponse
-from .models import Event
-import json, hmac, hashlib
-from django.conf import settings
+from .adapters.adapter1 import Adapter1
+from .adapters.adapter2 import Adapter2
 
-def _verify_signature(request):
-  signature = request.headers.get("Example-Signature")
+def get_adapter(service: str):
+  adapters = {
+      "1": Adapter1,
+      "2": Adapter2,
+  }
 
-  if not signature: return False
+  adapter_class = adapters.get(service)
+  if not adapter_class:
+      raise Http404("Unknown webhook service")
 
-  body = request.body
-  bytes_secret = json.dumps(settings.WEBHOOK_SECRET).encode("utf-8")
+  return adapter_class()
 
-  expected_signature = hmac.new(bytes_secret, body, hashlib.sha256).hexdigest()
-  return hmac.compare_digest(signature, expected_signature)
+def receiver(request, service):
+  adapter = get_adapter(service)
 
-def receiver(request):
-  if request.method != "POST": 
-    return HttpResponse(status=405) 
-
-  if not _verify_signature(request): 
+  if not adapter.verify_signature(request, adapter.secret_key): 
     return HttpResponse("Wrong signature", status=401)
 
   data = json.loads(request.body) 
@@ -32,6 +32,8 @@ def receiver(request):
     return HttpResponse(status=200) 
 
   Event.objects.create(idempotency_key=idempotency_key)
+
+  adapter.trigger_actions()
   
   return HttpResponse(status=200)
 
