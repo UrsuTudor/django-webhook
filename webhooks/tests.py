@@ -1,11 +1,13 @@
 from django.test import TestCase
 
 from .models import Event
+from django.core import mail
 from django.db.utils import IntegrityError
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 import json, hmac, hashlib
 from django.conf import settings
+from unittest.mock import patch
 
 def create_event(idempotency_key):
   return Event.objects.create(idempotency_key=idempotency_key)
@@ -33,7 +35,7 @@ class EventModelTests(TestCase):
 class ReceiverViewTest(TestCase):
   def test_returns_OK_with_signature(self):
     url = reverse("webhooks:receiver", kwargs={"service": "1"})
-    data = { "idempotency_key" : "123"}
+    data = { "idempotency_key" : "123", "email" : "test@mail.com"}
 
     bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
@@ -124,7 +126,7 @@ class ReceiverViewTest(TestCase):
 
   def test_creates_a_new_event(self):
     url = reverse("webhooks:receiver", kwargs={"service": "1"})
-    data = { "idempotency_key": "456" }
+    data = { "idempotency_key": "456", "email" : "test@mail.com" }
 
     bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
     payload_bytes = json.dumps(data).encode("utf-8")
@@ -155,3 +157,57 @@ class ReceiverViewTest(TestCase):
       HTTP_EXAMPLE_SIGNATURE=signature
     )
     self.assertEqual(response.status_code, 400)
+
+class Adapter1Test(TestCase):
+    def test_sends_an_email(self):
+      url = reverse("webhooks:receiver", kwargs={"service": "1"})
+      data = { "idempotency_key": "456", "email" : "test@mail.com" }
+
+      bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
+      payload_bytes = json.dumps(data).encode("utf-8")
+      signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
+
+      response = self.client.post(
+        url, 
+        data, 
+        content_type="application/json",  
+        HTTP_EXAMPLE_SIGNATURE=signature
+      )
+
+      self.assertEqual(len(mail.outbox), 1)
+
+      email = mail.outbox[0]
+
+      self.assertEqual(email.subject, "Confirmation email")
+      self.assertEqual(email.body, "Your account was created successfully")
+      self.assertEqual(email.to, ["test@mail.com"])
+
+    
+    def test_sends_multiple_emails_if_idempotency_key_changes(self):
+      url = reverse("webhooks:receiver", kwargs={"service": "1"})
+      data = { "idempotency_key": "456", "email" : "test@mail.com" }
+
+      bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
+      payload_bytes = json.dumps(data).encode("utf-8")
+      signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
+
+      response = self.client.post(
+        url, 
+        data, 
+        content_type="application/json",  
+        HTTP_EXAMPLE_SIGNATURE=signature
+      )
+
+      data = { "idempotency_key": "4567", "email" : "test@mail.com" }
+      bytes_secret = getattr(settings, "ADAPTER_1_SECRET").encode("utf-8")
+      payload_bytes = json.dumps(data).encode("utf-8")
+      signature = hmac.new(bytes_secret, payload_bytes, hashlib.sha256).hexdigest()
+
+      response = self.client.post(
+        url, 
+        data, 
+        content_type="application/json",  
+        HTTP_EXAMPLE_SIGNATURE=signature
+      )
+
+      self.assertEqual(len(mail.outbox), 2)

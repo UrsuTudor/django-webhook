@@ -33,7 +33,11 @@ def receiver(request, service):
 
   Event.objects.create(idempotency_key=idempotency_key)
 
-  adapter.trigger_actions()
+  email = data.get("email")
+  if email:
+    adapter.trigger_actions(email)
+  else: 
+    adapter.trigger_actions()
   
   return HttpResponse(status=200)
 

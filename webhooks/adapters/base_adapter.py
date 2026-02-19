@@ -12,6 +12,3 @@ class BaseAdapter:
 
     expected_signature = hmac.new(bytes_secret, body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(signature, expected_signature)
-
-  def trigger_actions(self):
-    return None
