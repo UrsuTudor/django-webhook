@@ -1,6 +1,8 @@
 import json
 from webhooks.models import Event
 from django.http import HttpResponse
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from .adapters.adapter1 import Adapter1
 from .adapters.adapter2 import Adapter2
 
@@ -35,6 +37,11 @@ def receiver(request, service):
 
   email = data.get("email")
   if email:
+    try:
+      validate_email(email)
+    except ValidationError:
+      return HttpResponse("Invalid email", status=400)
+
     adapter.trigger_actions(email)
   else: 
     adapter.trigger_actions()
